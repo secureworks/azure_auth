@@ -70,7 +70,6 @@ Copy sample.env to .env and make the required changes.
 
 Once you have entered some of the required Azure configuration into .env just run Make or run docker-compose build.  For local development you will need your SERVER_NAME to actually resolve locally so the easiest thing to do is to edit /etc/hosts and just add a new line "127.0.0.1 SERVER_NAME".
 
-TODO: ADD THE MAKEFILE
 
 ## Usage
 
@@ -88,7 +87,7 @@ If you have ideas for releases in the future, it is a good idea to list them in 
 Contributions appreciated, pull requests would just go through a review to see if things are working.
 
 ## Authors and acknowledgment
-Justin Carlson, Brad Crittenden, Robin Koumis (use external facing info?) 
+Justin Carlson, Brad Crittenden, Robin Koumis
 
 ## License
 Apache 2.0
