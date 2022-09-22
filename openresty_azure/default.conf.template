@@ -1,0 +1,136 @@
+# Copyright 2022 Secureworks, Inc.
+# 
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+# 
+#       http://www.apache.org/licenses/LICENSE-2.0
+# 
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+
+# nginx.vh.default.conf  --  docker-openresty
+#
+# This file is installed to:
+#   `/etc/nginx/conf.d/default.conf`
+#
+# It tracks the `server` section of the upstream OpenResty's `nginx.conf`.
+#
+# This config (and any other configs in `etc/nginx/conf.d/`) is loaded by
+# default by the `include` directive in `/usr/local/openresty/nginx/conf/nginx.conf`.
+#
+# See https://github.com/openresty/docker-openresty/blob/master/README.md#nginx-config-files
+#
+# Optional log locations.
+# log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+#                  '$status $body_bytes_sent "$http_referer" '
+#                  '"$http_user_agent" "$http_x_forwarded_for"';
+# error_log /var/log/nginx/error.log;
+# access_log  /var/log/nginx/access.log main;
+#
+#
+# Ansible or just hard code a resolver of 127.0.0.11 when using docker.
+# - name: Obtain nameserver IPs for nginx.conf
+#   command: awk 'BEGIN{ORS=" "} $1=="nameserver" {print $2}' /etc/resolv.conf
+#   register: nginx_resolver
+#   tags:
+#     - config
+#
+# Hardcoded, this needs to come from /etc/resolve.conf if not using docker.
+# On linux only systems you can use resolver local=on;
+resolver 127.0.0.11;
+lua_package_path '/usr/local/openresty/site/lualib/resty/?.lua;;';
+
+# Required to validate the CA certificate
+lua_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+lua_ssl_verify_depth 5;
+lua_shared_dict azure_auth 16m;
+
+# Setting headers around the buffer size that might be triggered by Azure being bloated.
+# Note the large_client_header_buffers is crucial or it will 502 nginx silently on you.
+client_header_buffer_size 128k;
+proxy_buffers 8 16k;
+proxy_buffer_size 32k;
+
+server {
+    listen       443 ssl http2;
+    listen       [::]:443 ssl http2;
+
+    # You will need an entry /etc/hosts 127.0.0.1 $SERVER_NAME (your.server.com)
+    server_name  ${SERVER_NAME};
+
+    ssl_certificate "/etc/ssl/server.crt";
+    ssl_certificate_key "/etc/ssl/server.key";
+    ssl_session_cache shared:SSL:1m;
+    ssl_session_timeout  10m;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    gzip on;
+    gzip_types text/plain application/xml application/javascript text/css;
+    charset utf-8;
+    client_max_body_size 10M;
+
+    # Set up some session information
+    set $session_secret Nyarlahot3pTh3Bl4ckPhar0h;  # Generate during build / value
+    set $session_name nginx_session;
+    set $session_storage cookie;   # Might not be required
+    large_client_header_buffers 4 32k;  # CRITICAL with Azure + nginx unless you want odd 502's
+    
+   # Include the Azure handler for using JWT token auth headers: 
+   # {Authorization: Bearer Token.Stuff} or using the resty-openidc plugin code.
+   include /usr/local/openresty/nginx/conf/azure_sso.lua;
+
+   location / {
+       # For testing exclusively that openresty is up (works without the azure_sso.conf)
+       # root   /usr/local/openresty/nginx/html;
+       # index  index.html index.htm;
+
+       # You can use a docker-compose.yml block to set an internal dns entry for local testing.
+       # Note if you use a specific port host port in dev in azure you must configure.
+       #   https://site.env.domain.org:port/web/auth/sso/
+       #
+       # networks:
+       #   default:
+       #     aliases:
+       #      - site.env.domain.org  # Then configure this in /etc/hosts and in portal.azure.com
+       client_max_body_size 20M;
+       proxy_set_header Host ${SERVER_NAME};
+       proxy_set_header X-Forwarded-Host $http_host;
+       proxy_pass "http://${INTERNAL_SERVER_NAME}:8000$request_uri";
+   }
+
+   # For AWS you will need a healthcheck that is NOT going to use Azure or the health checker
+   # will simply never make the host healthy and will not work as a proxy.  This is also helpful
+   # when trying to check if your proxy works vs is it something wrong with openresty or your config.
+   location  /healthcheck {
+       alias   /usr/local/openresty/nginx/html;
+       sendfile off;
+       access_by_lua_block {
+           ngx.header["Server"] = "nginx"
+       }
+   }
+
+    # Note on a large header error it will NOT use the /50x.html page but would result in an 
+    # AWS LB 502 making debugging into a hellish ordeal.
+    error_page   500 502 503 504  /50x.html;
+    location = /50x.html {
+        root   /usr/local/openresty/nginx/html;
+    }
+
+    # No sense constantly warning until you have a favicon.ico in the app
+    location = /favicon.ico {
+      return 204;
+      access_log     off;
+      log_not_found  off;
+    }
+    # deny access to .htaccess files, if Apache's document root
+    # concurs with nginx's one
+    # location ~ /\.ht {
+    #    deny  all;
+    # }
+}

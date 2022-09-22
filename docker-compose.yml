@@ -1,0 +1,68 @@
+---
+# Copyright 2022 Secureworks, Inc.
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+# You must set Azure Environment variables in the project .env file in this directory. 
+# It will build and come up without them but auth will not work (web will serve files fine).
+services:
+  # A basic service that can be used to show it received a token
+  web:
+    env_file:
+      - ./.env
+    build:
+      context: django_web
+    command: python manage.py runserver 0.0.0.0:8000
+    networks:
+      default:
+        aliases:
+          - $INTERNAL_SERVER_NAME
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/heartbeat/"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./django_web/:/code
+
+  # The authentication level for testing your Azure AD connections.
+  # Environment variables are set via envsubst in the docker-entrypoint.sh.
+  auth:
+    env_file:
+      - ./.env
+    build:
+      context: openresty_azure
+      args:
+        SERVER_NAME: $SERVER_NAME
+        INTERNAL_SERVER_NAME: $INTERNAL_SERVER_NAME
+    networks:
+      default:
+        aliases:
+          # Ensure SERVER_NAME in .env and your portal.azure.com application matches.
+          # If you are on a non standard https 443 port you will need to configure
+          # that in Azure. ie https://your.server.com:port/  Most likely you also need
+          # an /etc/hosts 127.0.0.1 SERVER_NAME entry to make Azure + DNS play nice.
+          - ${SERVER_NAME}
+    volumes:
+      # This is certainly not required for a build but is very nice for debug / hackery.
+      - ./openresty_azure/:/tmp/share
+      - ./openresty_azure/docker-entrypoint.sh:/docker-entrypoint.sh
+      - ./openresty_azure/default.conf.template:/etc/nginx/conf.d/default.conf.template
+      - ./openresty_azure/azure_sso.template.lua:/usr/local/openresty/nginx/conf/azure_sso.template.lua
+    ports:
+      - "8005:443"
+    depends_on:
+      - web

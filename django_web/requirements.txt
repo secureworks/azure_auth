@@ -1,0 +1,6 @@
+Django>=3.2,<4.0
+psycopg2>=2.8
+pyjwt==2.3.0
+requests
+requests_oauthlib
+cryptography

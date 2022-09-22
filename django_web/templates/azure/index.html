@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<!--
+    Copyright 2022 Secureworks, Inc.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+  </head>
+  <body>
+    <h3>Azure Auth Example</h3>
+    <div>
+      <div>Tenant ID: {{OAUTH2_TENANT_ID}}</div>
+      <div>Client ID: {{OAUTH2_CLIENT_ID}}</div>
+      <div>AUTHORITY: {{OAUTH2_AUTHORITY}}</div>
+      <div>JWKS KEYS: {{OAUTH2_JWKS_URI}}</div>
+      {% if username %}
+      <a href="/auth/web/sso/logout">Logout {{username | safe}}</a>
+      {% endif %}
+    </div>
+
+    <h4> Current User </h4>
+    <div>
+      <div class="current-user">Username: {{username | safe}}</div>
+    </div>
+
+    <h4> Javascript Azure Renewal (window.AzureInstance) has the login instance for inspection</h4>
+    <div id="azure_nightmares">
+      This is all to prevent a non Angular or React app from having awkward timeouts and causing js CORs errors.
+      <br>
+      Starting in 10s...
+    </div>
+
+    <h3> Token Information </h3>
+    <div>
+      <a target="window" href="https://jwt.io/">Debug Tokens at jwt.io</a>
+    </div>
+
+    <div>
+      <h4>ID Token from OpenResty & resty-openidc </h4>
+      <pre>{{id_token | pprint}}</pre>
+    </div>
+      
+    <div>
+      <h4>Encrypted Token from Headers:</h4>
+      <pre>{{enc_id_token | safe}}</pre>
+
+      <div>
+        <h4>Decryption of Token VIA python</h4>
+        <pre>{{decrypted | pprint}}</pre>
+      </div>
+    </div>
+    <!-- For Debugging your headers when things go wrong...
+    <div>
+      Headers: {{headers | safe}}
+    </div>
+    -->
+    <div>
+        <a href="/service_token/" target="window">Example Service Token</a>
+    </div>
+  </body>
+
+  <!-- You should enable django_csp but it is a bit more than I want in this demo.
+    For CSP you would have to get hashes for all these CDN sources.
+  -->
+  <script type="text/javascript "src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment-with-locales.min.js"></script>
+  <script type="text/javascript" src="https://alcdn.msauth.net/browser/2.9.0/js/msal-browser.min.js"></script>
+
+  <!-- And for local css or scripts you would have to add a CSP_NONCE into the context -->
+  {% load static %}
+  <script type="module" nonce="{{ CSP_NONCE }}">
+      import {AzureAuth} from '{% static "azure_authentication.js" %}';
+
+      let clientId = "{{OAUTH2_CLIENT_ID}}";
+      let authority = "{{OAUTH2_AUTHORITY}}";
+      let email = "{{username}}";
+      console.log(`Email: ${email} authority: ${authority} clientId: ${clientId}`);
+
+      let aaDom = $("#azure_nightmares");
+      let aa = new AzureAuth(clientId, authority, email, aaDom);
+      // aa.RENEW_IF_EXP_WITHIN_MINUTES = 55;
+
+      // Also for debug, so you can force call methods :)
+      // ie: window.AzureInstance.silentRenewal() will force a renewal and send the token to the
+      // openresty session data.
+      window.AzureInstance = aa;
+      setTimeout(() => {
+          aa.start();
+      }, 10 * 1000);
+  </script>
+</html>
