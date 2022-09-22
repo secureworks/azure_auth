@@ -2,7 +2,7 @@
 
 An example of how to build out Azure SSO authentication and the Javascript renewal of credentials for long lived pages / apps.  This should work in Chrome, Firefox, Edge, Brave and Safari but there is currently no Microsoft support for Opera.
 
-TODO:
+Future Improvements in the lua code:
 * Ensure the access_token checks id_token.exp, iss, etc
 * Restrict the access_token update to only in keep_alive
 
