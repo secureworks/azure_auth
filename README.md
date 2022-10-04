@@ -36,9 +36,8 @@ Future Improvements for the lua code:
 
 Services
 --------
-There are two docker containers one respresents a webserver that is around to show how to proxy the connection from auth, display login information, AND show the keep alive method using MSAL.js.
-This service is meant to be the "internal" facing service that the Auth piece will proxy connections
-into.
+There are two docker containers one is the authentication proxy using resty-openidc and the other is a basic django webside showing MSAL.js use with JWT python validation.  The auth container has some extra code that 
+allows it to take a renewed token from the MSAL.js authentication which will prevent AJAX cors errors.
 
 * It does not require JWT tokens but will show you what the Azure proxy is sending along.
 * There is also python code to demonstrate how to deal with a Microsoft Azure token or request one as a service.
